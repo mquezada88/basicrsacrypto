@@ -56,6 +56,79 @@ int rsa_keyGen(size_t keyBits, RSA_KEY* K)
 	 * the right length, and then test for primality (see the ISPRIME
 	 * macro above).  Once you've found the primes, set up the other
 	 * pieces of the key ({en,de}crypting exponents, and n=pq). */
+
+	 /* 1: Pick 2 Distinct prime numbers p and q */
+	 int n = 0;
+	 int r = 0;
+
+	 while(1)
+	 {
+		 /* A buffer has to be made with bytes allocated. 
+		 Then an int container has to be made from mpz(gmp) then
+		 bytes gets converted to integer. */
+		 unsigned char* _buff;
+		 _buff = malloc(keyBits/8);
+		 randBytes(_buff, keyBits/8);
+		 NEWZ(num);
+		 BYTES2Z(num, _buff, keyBits/8);
+
+		 r = ISPRIME(num);
+		 if(r >0)
+		 {
+			 n++;
+			 if (n == 1)
+			 	mpz_set(K->p, num);
+			 else
+			 {
+				 mpz_set(K->q,num);
+				 break;
+			 }
+		 }
+		 /* Free Buffer. */
+		 free(_buff);
+
+	 }
+	 /* #2: Compute n = pq */
+
+	 NEWZ(rop); 
+	 mpz_mul(rop,K->q, K->p);
+	 mpz_set(K->n,rop);
+
+	 /* 3: Compute Phi of n. (p - 1)(q - 1) */
+
+	NEWZ(p1); mpz_sub_ui(p1, K->p, 1);
+	NEWZ(p2); mpz_sub_ui(p2, K->q, 1);
+	NEWZ(phi_n); mpz_mul(phi_n, p1, p2);
+
+	/* 4: Choose an integer s.t e is between 1 and phi of n
+	and that the gcd(e,phi(n)) = 1. e and phi are coprime. */
+
+	// Init. variables
+	NEWZ(e); mpz_set_ui(e, 2);
+
+	NEWZ(result);
+	mpz_gcd(result, e, phi_n);
+
+	while (mpz_get_ui(result) != 1)
+	{
+		mpz_add_ui(e, e, 1);
+		mpz_gcd(result, e, phi_n);
+	}
+
+	mpz_set(K->e, e);
+
+	/* 5: Determine d as d ≡ e^−1 (mod φ(n)); i.e., d is the modular multiplicative inverse of e (modulo φ(n)). */
+
+	NEWZ(g); NEWZ(d); NEWZ(t);
+	mpz_gcdext(g, d, t, e, phi_n);
+	
+	// To avoid negative d. 
+	mpz_add(d, d, phi_n);
+	
+	// Set d.
+	mpz_set(K->d, d);										
+
+
 	return 0;
 }
 
@@ -64,14 +137,25 @@ size_t rsa_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 {
 	/* TODO: write this.  Use BYTES2Z to get integers, and then
 	 * Z2BYTES to write the output buffer. */
-	return 0; /* TODO: return should be # bytes written */
+	NEWZ(cipherText);
+	NEWZ(num);
+	BYTES2Z(num, inBuf, len);
+	mpz_powm(cipherText, num, K->e, K->n);
+	Z2BYTES(outBuf, len, cipherText);
+	return len; /* TODO: return should be # bytes written */
 }
 size_t rsa_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 		RSA_KEY* K)
 {
-	/* TODO: write this.  See remarks above. */
-	return 0;
+	NEWZ(plainText);
+	NEWZ(num);
+	BYTES2Z(num, inBuf, len);
+	mpz_powm(plainText, num, K->d, K->n);
+	Z2BYTES(outBuf, len, plainText);
+	return len;
 }
+
+	/* TODO: write this.  See remarks above. */
 
 size_t rsa_numBytesN(RSA_KEY* K)
 {
