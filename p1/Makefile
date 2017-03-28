@@ -6,7 +6,7 @@ TSOURCE := $(wildcard tests/*.c)
 TESTS   := $(TSOURCE:.c=)
 
 COMMON   := -O2 -Wall
-CFLAGS   := $(CFLAGS) $(COMMON)
+CFLAGS   := $(CFLAGS) $(COMMON) -std=c99
 CC       := gcc
 LDADD    := -lcrypto -lssl -lgmp
 LD       := $(CC)
