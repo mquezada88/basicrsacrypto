@@ -119,11 +119,52 @@ size_t ske_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len, SKE_
 	 * Oh, and also, return -1 if the ciphertext is found invalid.
 	 * Otherwise, return the number of bytes written.  See aes-example.c
 	 * for how to do basic decryption. */
-	return 0;
+    unsigned char hmac[32];
+    HMAC(EVP_sha256(), K->hmacKey, HM_LEN, inBuf, len-32, hmac, NULL);
+    for (int i = 0; i < 32; i++)
+    {
+        if (hmac[i] != inBuf[len-32+i])
+            return -1;
+    }
+    unsigned char IV[16];
+    for (int i = 0; i < 16; i++) IV[i] = i;
+    int x = len - 32 - 16;
+    unsigned char ct[x];
+    for (int i = 16; i < 16 + x; i++)
+    {
+        ct[i-16] = inBuf[i];
+    }
+    EVP_CIPHER_CTX* ctx1 = EVP_CIPHER_CTX_new();
+    ctx1 = EVP_CIPHER_CTX_new();
+    if (1!=EVP_DecryptInit_ex(ctx1, EVP_bf_cbc(), 0, K->aesKey, IV))
+        ERR_print_errors_fp(stderr);
+    size_t ctLen = x;
+    int nWritten = 0;
+    if (1!=EVP_DecryptUpdate(ctx1, outBuf, &nWritten, ct, ctLen))
+        ERR_print_errors_fp(stderr);
+    return 0;
 }
 size_t ske_decrypt_file(const char* fnout, const char* fnin,
 		SKE_KEY* K, size_t offset_in)
 {
 	/* TODO: write this. */
+    int fd = open(fnin, O_RDONLY);
+    if (fd == -1) return -1;
+    struct stat sb;
+    if (fstat(fd, &sb) == -1) return -1;
+    if (sb.st_size == 0) return -1;
+    unsigned char *src;
+    src = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (src == MAP_FAILED)
+        return -1;
+    char* pt = malloc(sb.st_size-48);
+    ske_decrypt((unsigned char*)pt, src, sb.st_size, K);
+    printf("Message after decrypt\n");
+    for (int i = 0; i < (sb.st_size-48); i++)
+        printf("%c", pt[i]);
+    printf("\n");
+    FILE *f = fopen(fnout, "w");
+    fprintf(f, "%s", pt);
+    fclose(f);
 	return 0;
 }
